@@ -1,0 +1,94 @@
+README file for Programming Assignment 2 (C++ edition)
+=====================================================
+
+	The Makefile contains targets for compiling and running your
+	program. DO NOT MODIFY.
+
+	The README contains this info. Part of the assignment is to fill
+	the README with the write-up for your project. You should
+	explain design decisions, explain why your code is correct, and
+	why your test cases are adequate. It is part of the assignment
+	to clearly and concisely explain things in text as well as to
+	comment your code. Just edit this file.
+
+	cool.flex is a skeleton file for the specification of the
+	lexical analyzer. You should complete it with your regular
+	expressions, patterns and actions. Information on how to do this
+	is in the flex manual.
+
+	test.cl is a Cool program that you can test the lexical
+	analyzer on. It (intentionally!) contains some errors, so it
+	won't compile with coolc. The errors will help you test your lexer's
+	ability to detect errors. However, test.cl does not exercise
+	all lexical constructs of COOL and part of your assignment is to rewrite
+	test.cl with a complete set of tests for your lexical analyzer.
+	A correct version of this program can be found in the example suite.
+
+	Do not modify any other file.
+
+Instructions
+------------
+
+	To compile your lextest program type:
+
+	% make
+
+	Run your lexer by putting your test input in a file 'foo.cl' and
+	run the lextest program:
+
+	% ./lexer foo.cl
+
+	To run your lexer on the file test.cl type:
+
+	% make dotest
+
+	If you think your lexical analyzer is correct and behaves like
+	the one we wrote, you can try it out by replacing the lexer
+	in the reference compiler with your own lexer. Just copy
+	your compiled lexer binary from this assignment into the
+	directory where the reference compiler is.	
+	If your lexical analyzer behaves in an
+	unexpected manner, you may get errors anywhere, i.e. during
+	parsing, during semantic analysis, during code generation or
+	only when you run the produced code. So beware.
+
+	To submit your solution, run:
+
+	% make zip
+
+	Check the resulting zip file to make sure it contains everything
+	it should. Then submit it on Gradescope.
+
+	GOOD LUCK!
+
+---8<------8<------8<------8<---cut here---8<------8<------8<------8<---
+
+Write-up for PA2
+----------------
+
+1. Explain design decisions, explain why your code is correct, and
+   why your test cases are adequate.
+
+Below I provide commentary on high-level design decisions which may not be very self-evident from the code and inline code comments:
+
+Miscellaneous Design Decisions:
+* To match on case insensitive keywords, I used the Flex pattern: (?i:pattern)
+* I used Flex character class expressions to simplify the writing of Object and Type identifiers patterns. For example: [[:alnum:]] can be used to match letters and digits.
+* When matching EOF I had to call BEGIN(INITIAL) to have flex then immediately call its default yyterminate() behavior after returning the EOF error. Not calling BEGIN(INITIAL) triggered an infinite loop. 
+
+String Design Decisions:
+* I created two start conditions for matching Strings. "STRINGS" represents a currently valid string, while "STRINGS_ERROR" represents a string which was invalidated due to an error, such as containing an invalid character or being too long. Since "scanning should resume after the end of the string," STRINGS_ERROR primarily consumes input until a quotation mark, or a newline is matched. If a newline is matched, the "Unterminated string constant" error is not output in addition to the prior error, as is done by the refimpl.
+* I have one rule to match all allowed escape sequences using a regex union. The pattern is defined as ESC_SEQ_STRING. The action associated with the rule checks the last character in yytext and selects a case in a switch expression that produces the correct ascii character. I wrote it like this for brevity in the Flex file, though I could've just as well made a separate rule for each escape sequence.
+
+Comment Design Decisions:
+* I created two start conditions for matching comments, one for each kind of comment, i.e. "DASH_COMMENTS" for "-- comment" and "COMMENTS" for "(* comment *)". 
+* (**) comments can be nested which required a variable I called "comment_level" which kept track of the level of comment nesting. Every time "(*" is matched, comment_level is incremented. When "*)" is matched when in the COMMENTS condition, the comment_level decrements. If at that point comment_level is greater than 0, then the lexer stays in the COMMENTS condition. If at that point comment_level reaches 0, then the lexer switches to the INITIAL condition. If "*)" is matched in the INITIAL condition, an "Unmatched *)" error is thrown. 
+
+Correctness and Tests:
+* I used all of the tokens in cool_parse.h except LET_STMT, as was required.
+* The output of my lexer is identical with the output of the refimpl lexer for test.cl. 
+* The output of my lexer is identical with the output of the refimpl lexer for all programs in the examples folder provided on NYU Classes. 
+* I created my own test cool file with Error cases mentioned in the assignment and the cool-manual, and the output of my lexer is identical with the output of the refimpl lexer.
+	* Doing this covered all the error cases that would not be present in the lexically correct Examples files, and may not be present in test.cl
+* I used the Unix diff tool to compare all the outputs of my lexer with the refimpl lexer for all of the aforementioned test cases.
+* I also tested my lexer using it in place of the refimpl lexer when compiling my pa1.

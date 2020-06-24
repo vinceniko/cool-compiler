@@ -1,0 +1,126 @@
+README file for Programming Assignment 5  (C++ edition)
+=======================================================
+
+	The Makefile contains targets for compiling and running your
+	program, as well as handing it in. DO NOT MODIFY.
+
+	The README contains this info. Part of the assignment is to
+	fill the README with the write-up for your project. You should
+	explain design decisions, explain why your code is correct,
+	and why your test cases are adequate. It is part of the
+	assignment to clearly and concisely explain things in text as
+	well as to comment your code. Just edit this file.
+
+	In example.cl you should write a correct Cool program which
+	tests as many aspects of the code generator as possible. It
+	should pass your code generator, and running spim on the
+	generated output should run the program correctly.
+
+	cgen.cc is the skeleton file for the code generator. This
+	skeleton is much larger than the ones for previous
+	assignments.  The skeleton provides three components of the
+	code generator:
+
+		- functions to build the inheritance graph; (we supply
+		  this in case you didn't get this working for PA4)
+
+		- functions to emit global data and constants;
+		 
+		- functions to emit spim instructions; (we supply
+		  these last two to save you some tedious coding)
+
+	You should work to understand this code, and it will help you
+        write the rest of the code generator.
+
+	cgen.h is the header file for the code generator. Feel free to
+	add anything you need.
+
+	cgen_supp.cc is general support code for the code generator.
+	You can add functions as you see fit, but do not modify the
+    provided functions.
+
+	emit.h defines a bunch of macros which should come in handy
+	when you actually want to emit code. Feel free to change
+	anything here to suit your needs.
+
+        cgen-phase.cc supplies the driver for the compiler. You should
+        not modify this code.
+
+	symtab.h contains a symbol table implementation. You may
+        modify this file if you'd like.
+
+	cool.h contains definitions that are used by almost all parts
+	of the compiler. DO NOT MODIFY.
+
+        tree.h contains the base class `tree_node' of the AST nodes.
+        DO NOT MODIFY.
+
+        cool-tree.cc, cool-tree.h, and cool-tree.handcode.h contain
+        the declarations and definitions of code generation AST nodes.
+        You may add fields as you wish, but you shouldn't modify any
+        of the methods already there except `code', which you may
+        modify or remove as you wish.  Note that cool-tree.handcode.h
+        is different from the same file in PA4---this file contains
+        function definitions needed for the cgen.cc skeleton.  You may
+        modify cool-tree.h or cool-tree.handcode.h, but don't modify
+        cool-tree.cc.  Place all method definitions in cgen.cc
+
+        Do not modify any other file.
+
+Instructions
+------------
+
+	To compile your compiler and code generator type:
+
+	% make
+
+    This produces an executable named "cgen" which is standalone
+    phase of the Cool compiler. The code generator executable
+    accepts as input the output of the semant phase, so in order 
+    to test it, you'll need to copy a lexer, parser, and semantic
+    analyzer into the directory: either your own lexer and parser
+    from the previous assignments, or the lexer, parser, and semantic
+    analyzer from the reference implementation of the compiler.
+
+	To run your compiler on the file example.cl, type:
+
+	% make dotest
+
+    This will produce a compiled assembly language file example.s
+    and attempt to run it. You should examine the assembly language
+    file to make sure that it makes sense.
+
+    If you think your code generator checker is correct and behaves like
+    the one we wrote, you can try it out by replacing the code
+    generator in the reference compiler with your own code generator.
+    Just copy your compiled cgen binary from this assignment into the
+    directory where the reference compiler is.
+
+    To submit your solution, run:
+
+    % make zip
+
+    Check the resulting zip file to make sure it contains everything
+    it should. Then submit it on Gradescope.
+
+	GOOD LUCK!
+
+---8<------8<------8<------8<---cut here---8<------8<------8<------8<---
+
+Write-up for PA5
+----------------
+
+1. Explain design decisions, explain why your code is correct,
+    and why your test cases are adequate.
+
+My Cool MIPs code generator made heavy use of the stack machine approach with accumulator shown in the class slides, meaning that expressions saved their results to ACC (a0) and then the results which would have to be stored for future reference (such as parameter and local variable bindings) would be stored on the stack at a given offset. To reference these variables I used the approach shown by Professor Epstein in class--I created an abstract VarBinding class which stored a register and emitted code to access the object's address stored at an offset from the address stored at the register. Descendant classes were created for every variation of a variable binding (local bindings, formal bindings (parameters), and attribute bindings). A FunctionContext accompanied the VarBinding class--it inherited from SymbolTable since the scoping mechanics were needed in addition to tracking the current offset for the bindings and instantiating them with the correct current offset. The ClassTable stored a FunctionContext singleton. The ClassTable was also made global for the code generator since it stored class, binding, and label number state needed in certain tree-node expressions, i.e. (object_class, typcase_class, dispatch_class, etc.).
+
+Much of the rest of the design was inspired by the refimpl code. I would usually first try to understand the refimpl code before writing my own. Since the refimpl code gen made use of a register allocation approach, oftentimes I would have to convert that portion to my stack approach while using parts of the surrounding code. I would then use small test cases to generate code which compared my generated code with the refimpl's and tested for bugs during execution. Just like the refimpl, I stored self in s0.
+
+There isn't much else to say about the implementation that can't be found by reading the code. The general protocol was generate assembly first for the class name table, class prototypes and dispatch tables, then  init code (which is where attributes are initialized) and finally the method code (which is where the code generation for expressions also occurs). The most difficult part for me was ensuring correctness for the expressions and adhering to stack discipline (given my overall lack of experience with writing assembly).
+
+After v0.1 was finished and my code gen was working for the (limited) test cases I wrote, I tested it on the provided examples. Many of the files weren't able to run correctly, so began the lengthy debugging process. I would prioritize bug fixing for small files since they would generate less code. I would also take portions of those files where I believed the error was occurring and would generate code for only that portion. I would compare my code gen with the refimpl's code gen for that portion and try to locate what difference may be responsible for that. A particular challenge I encountered was implementing the case statement. I initially overlooked that the least common ancestor had to be chosen, and once I did, I realized that I would have to write code to get the min and max subclass tag range for a given class (to check whether it could be selected). Professor Epstein helped me during office hours in determining that I could also sort case branch code gen on class tags in descending order, so that the most specific class is generated first (with object being the last branch generated if it was specified in the case statement). This wasn't particularly difficult to write, but finding the issue was tough given debugging MIPs code is daunting (given that I didn't use any MIPs debugging features and most generated runtime error messages aren't that descriptive). 
+
+All in all, my generated code works for my test cases and all example files as expected (matching the refimpl as far as I can see). I had a bug in my case code that took a bit to resolve (it errored on hairyscary.cl causing the heap to increase without printing out the values that the refimpl does). After some debugging, I found there were a few issues with returning from the case expression and the labeling, which I resolved.
+
+I liked the assignment, am pretty satisfied with my result, and find it very pleasing that I wrote assembly code (my first time really doing so) and managed to output actually running Cool code. I especially like the output of cells.cl.

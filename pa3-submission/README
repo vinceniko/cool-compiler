@@ -1,0 +1,141 @@
+README file for Programming Assignment 3 (C++ edition)
+======================================================
+
+	The Makefile contains targets for compiling and running your
+	program. DO NOT MODIFY.
+    
+	The README contains this info. Part of the assignment is to
+	fill in the README with the write-up for your project. You should
+	explain design decisions, explain why your code is correct, and why
+	your test cases are adequate. It is part of the assignment to
+	clearly and concisely explain things in text as well as to comment
+	your code. Just edit this file.
+
+	cool.y is the skeleton for the parser specification that you
+	are to write. It already contains productions for the program
+	and the classes. Use them as an example to write the remaining
+	productions.  You should also read the bison documentation.
+	This skeleton will compile and run as is, but it doesn't
+	do much.
+
+	good.cl, bad.cl test a few features of the grammar. You should
+	add tests to ensure that good.cl exercises every legal
+	construction of the grammar and that bad.cl exercises as many
+	different parsing errors as you can squeeze into one file.
+
+    Do not modify any other file.
+
+Instructions
+------------
+
+	To compile your parser program type:
+
+	% make
+
+	This produces an executable named "parser" which is standalone
+	phase of the Cool compiler. The parser executable accepts
+    as input the output of the lexer phase, so in order to test it,
+    you'll need to copy a lexer into the directory: either your
+    own lexer from the previous assignment, or the lexer from the
+    reference implementation of the compiler.
+
+	To run your parser on the files good.cl and bad.cl type:
+
+	% make dotest
+
+    If you think your parser is correct and behaves like
+    the one we wrote, you can try it out by replacing the parser
+    in the reference compiler with your own lexer. Just copy
+    your compiled parser binary from this assignment into the
+    directory where the reference compiler is.
+
+    To submit your solution, run:
+
+    % make zip
+
+    Check the resulting zip file to make sure it contains everything
+    it should. Then submit it on Gradescope.
+
+	GOOD LUCK!
+
+---8<------8<------8<------8<---cut here---8<------8<------8<------8<---
+
+Write-up for PA3
+----------------
+
+1. Explain design decisions, explain why your code is correct, and why
+    your test cases are adequate.
+
+Important Design Decisions:
+
+The design of my grammar tries to match the Cool Manual syntax in figure 1 on page 17. Of course, I had to create extra production rules to resolve shift/reduce conflicts and to implement the pseudo regular expression syntax that was used to in figure 1. I also renamed expr to expression to better match the style of the starting code in cool.y. 
+
+A major design decision that I had to make was how to best express 0 or more terminals that were delimited by another terminal, such as ',' This would apply to formal lists in a method definitions and expression lists in method calls. My first naive attempt tried a production rule like:
+```
+expression_list:
+        expression 
+                { $$ = single_Expressions($1); }
+        | expression_list_dispatch ',' expression
+                { $$ = append_Expressions($1, single_Expressions($3)); }
+		| { $$ = nil_expressions(); }
+        ;
+```
+However, this would allow the following to be matched `expression,` in a method call, i.e. `expression ',' epsilon`. This is invalid syntax. 
+
+Then I decided to rewrite the expression_list rule to accept 1 or more expressions delimited by a comma instead and I wrote a separate rule in expression which represented a 0 argument method call, in addition to a 1 or more argument method call, for example:
+```
+expression:
+		...
+
+        | OBJECTID '(' ')'
+                { $$ = dispatch(object(idtable.add_string("self")), $1, nil_Expressions()); }
+		| OBJECTID '(' expression_list ')'
+                { $$ = dispatch(object(idtable.add_string("self")), $1, $3); }
+
+
+```
+This worked but it required duplicating, with minor syntax changes, a few of the expression rules that dealt with method calls and definition (in the case of formal list). I thought it was ugly grammar as well, so I decided to rewrite it once more.
+
+My ultimate solution was to create another rule called expression_list_w_empty which would represent a list of 1 or more expressions, or an empty list. It was another layer essentially. Here is an example of such grammar:
+```
+expression_list_dispatch_w_empty:
+        /* list of ',' delimited expressions or no expressions */
+        /* used for method dispatch */
+
+        expression_list_dispatch
+                { $$ = $1;}
+        | { $$ = nil_Expressions(); }
+        ;
+
+expression_list_dispatch:
+        /* 1 or more expressions delimited by ',' */
+        /* used for method dispatch */
+        /* can not put an empty rule here (call with no args) since the rule would match `expression_list_dispatch ',' epsilon`. instead created expression_list_dispatch_w_empty */
+        
+        expression 
+                { $$ = single_Expressions($1); }
+        | expression_list_dispatch ',' expression
+                { $$ = append_Expressions($1, single_Expressions($3)); }
+        ;
+
+expression:
+		...
+
+        /* method dispatch */
+        | expression '.' OBJECTID '(' expression_list_dispatch_w_empty ')'
+                { $$ = dispatch($1, $3, $5); }
+        | expression '@' TYPEID '.' OBJECTID '(' expression_list_dispatch_w_empty ')'
+                { $$ = static_dispatch($1, $3, $5, $7); }
+		
+		...
+```
+
+Shift/Reduce conflicts regarding most arithmetic and conditional expressions had to be resolved using the precedence rules defined in the Cool manual in section 3.2.1. However, some Shift/Reduce conflicts were not covered by the rules in 3.2.1. One such conflict regarded Let. I found that Let had to extend as far to the right as possible (meaning the expression) before reducing. Using %prec, let had to be assigned a lower precedence than all the other expressions so as to shift as much as the input allowed (the LET_REDUCE token was created for this).
+
+Let also offered the challenge of having to nest expressions instead of working with an expression list. In my first attempt I tried to mimic the grammar in the Cool manual, so I wrote a production rule which represented the entire let statement, with the Let bindings as a contained non-terminal. But, this prevented me from calling the let method provided in cool-tree.h properly since I no longer had access to the args for the let call. What I ended up doing was creating a rule which would match the bindings leading to ',' first, and end with a match to the binding ending with the IN token (so the expression following IN would be the final nested expression).
+
+Testing:
+
+Every time I created a rule I wrote test cases which tried to be exhaustive for every valid use of the rule in good.cl and every syntax violation for the rule in bad.cl. I would then run a script which would compare the output of the refimpl parser and my parser for both good.cl and bad.cl. This incremental approach allowed me to easily see where the differences were and quickly figure out how to correct them. However, one challenge was sometimes recognizing errors that spanned multiple lines or incorrect rules that impacted other rules, i.e. fixing one rule could change the error output in other places. 
+
+After finishing an early version of the parser, I ran it against every valid cool file I had (the examples on NYU classes and pa1) and compared the refimpl parser output with my parser's output. The only differences I ended up not being able to solve were those regarding line numbers. I account for the refimpl output of 0 where no_expr() was used by modifying node_lineno in cool.y. However, it seems that I could not account for differences with refimpl where whitespace caused syntax to span multiple lines. However, this is not a major issue. After accounting for the line number differences for no_expr all the autograder tests passed. 

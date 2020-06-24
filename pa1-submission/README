@@ -1,0 +1,59 @@
+
+README file for Programming Assignment 1
+========================================
+
+
+	The README contains this info. Part of the assignment is to
+	answer the questions at the end of this README file.
+	Just edit this file.
+
+	atoi.cl is an implementation in Cool of the string to integer
+	conversion function known from the C language.
+
+	stack.cl is the skeleton file which you should fill in with
+	your program.
+
+	stack.test is a short test input to the stack machine.
+	
+
+Instructions
+------------
+
+	To compile and run your program, type:
+
+	% make
+
+        Try it now -- it should work, and print "Nothing implemented"
+        (among a few other things).
+
+	To submit your solution, run:
+
+	% make zip
+
+	Check the resulting zip file to make sure it contains everything
+	it should. Then submit it on Gradescope.
+
+	GOOD LUCK!
+
+---8<------8<------8<------8<---cut here---8<------8<------8<------8<---
+
+Questions on PA1
+----------------
+
+1. Describe your implementation of the stack machine in a single short
+   paragraph.
+
+I used an OOP approach. The base class for all symbols accepted through stdin is the StackEntity. The StackEntity is treated like an abstract class that has a pure virtual function: exec_from_io. exec_from_io defines the behavior according to the symbol after reading it from stdin. StackEntity has two major abstract class descendants, StackObject and StackCmd. A StackObject is any symbol that can be pushed onto the stack, for example, an int or "s". It overrides exec_from_io to push to the stack. A StackCmd is a StackObject which modifies the elements of the stack after the "e" symbol is read, for example, "s" or "+". StackCmd defines another pure virtual function: "exec_from_stack". So to give a short example, if the stack from top to bottom is: `+ 1 2`, having read "e" from stdin, the EvalCmd class (a descendant from StackEntity since "e" should not pushed to the stack) is chosen to call its exec_from_io, which in turn calls exec_from_stack on the StackObject on the top of the stack, i.e. "+", and the plus pops itself and operates on the integer operands below it. If the StackObject on the top of the stack is not a StackCmd, then EvalCmd does nothing--this is checked with the case expression. The stack datastructure itself holds the top StackNode which is a container type for StackEntity that also contains pointers to StackNodes lower in the stack (the conventional stack/list approach).
+
+2. List 3 things that you like about the Cool programming language.
+
+1. Its inheritance model worked well for this assignment. As compared to C++, it is nice to enable polymorphism without having to use pointers and dealing with the syntax.
+2. Case is a useful feature. I used it to cast StackObjects to IntObjects when popping from the stack. I remember seeing something similar in Go with Type Switches as applied to its interfaces. I'm sure other languages allow this, but maybe in more obtuse ways.
+3. The void object default paired with isvoid is useful. It could be used to check when the stack ends, which is what I used for printing the entire stack.
+
+3. List 3 things you DON'T like about Cool.
+
+1. The syntax around semicolons was confusing for me in the beginning. Reading the Cool manual section on expressions helped clear it up though. 
+2. Running it. It's not a big deal, but I had to download the NYU VPN to get Vital running and then had to write a bash script to automate logging into the sftp server to transfer the code (since I prefer developing in my local environment). I would prefer it if there was a native solution for Mac that would be accessible. For some reason, Virtualbox couldn't finish installing Ubuntu on my Mac (it would become unresponsive during the install process consistently), so I opted for Vital instead.
+3. Debugging it. Most of the compiler errors were a bit vague (especially on semicolons). And, unless I'm wrong, there doesn't seem to be a way to use a visual debugger for Cool.
+
